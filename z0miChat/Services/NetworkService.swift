@@ -5,7 +5,6 @@
 //  Created by Aleksey Cherkasskiy on 15.03.2025.
 //
 
-
 import Foundation
 import UIKit
 
@@ -90,7 +89,7 @@ class NetworkService {
         }
     }
     
-    func sendChatMessage(messages: [ChatMessage], model: AIModel) async throws -> String {
+    func sendChatMessage(messages: [ChatMessage], model: AIModel) async throws -> (content: String, reasoning: String?) {
         let settingsManager = SettingsManager()
         guard !settingsManager.liteLLMURL.isEmpty else {
             throw NSError(domain: "NetworkError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Server URL not configured"])
@@ -106,15 +105,35 @@ class NetworkService {
             let model: String
             let messages: [Message]
             let temperature: Double
+            let responseFormat: ResponseFormat?
             
             struct Message: Encodable {
                 let role: String
                 let content: String
             }
+            
+            struct ResponseFormat: Encodable {
+                let type: String
+                let includeReasoning: Bool?
+            }
         }
         
         let requestMessages = messages.map { ChatRequest.Message(role: $0.role.rawValue, content: $0.content) }
-        let chatRequest = ChatRequest(model: model.id, messages: requestMessages, temperature: 0.7)
+        
+        // Add reasoning request for models that support it
+        let responseFormat: ChatRequest.ResponseFormat?
+        if model.id.contains("claude") || model.id.contains("deepseek") {
+            responseFormat = ChatRequest.ResponseFormat(type: "json", includeReasoning: true)
+        } else {
+            responseFormat = nil
+        }
+        
+        let chatRequest = ChatRequest(
+            model: model.id,
+            messages: requestMessages,
+            temperature: 0.7,
+            responseFormat: responseFormat
+        )
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -158,6 +177,7 @@ class NetworkService {
         struct ChatResponse: Decodable {
             let choices: [Choice]
             let usage: Usage?
+            let reasoning: String?  // Some models may include reasoning directly
             
             struct Choice: Decodable {
                 let message: Message
@@ -167,6 +187,7 @@ class NetworkService {
                 struct Message: Decodable {
                     let role: String
                     let content: String
+                    let reasoning: String?  // Field for model reasoning/thinking
                 }
             }
             
@@ -183,7 +204,11 @@ class NetworkService {
             throw NSError(domain: "ChatError", code: 2, userInfo: [NSLocalizedDescriptionKey: "No response received"])
         }
         
-        return firstChoice.message.content
+        // Extract reasoning either from the message or top-level property
+        let reasoning = firstChoice.message.reasoning ?? chatResponse.reasoning
+        
+        // Use the message content as the response
+        return (firstChoice.message.content, reasoning)
     }
     
     func testConnection(liteLLMURL: String) async throws -> Bool {

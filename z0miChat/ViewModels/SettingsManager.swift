@@ -15,6 +15,7 @@ class SettingsManager: ObservableObject {
     @Published var openAIKey: String = ""
     @Published var claudeKey: String = ""
     @Published var deepSeekKey: String = ""
+    @Published var lastSelectedModelId: String = ""
     
     private let userDefaults = UserDefaults.standard
     
@@ -24,6 +25,7 @@ class SettingsManager: ObservableObject {
     
     func saveSettings() {
         userDefaults.set(liteLLMURL, forKey: "liteLLMURL")
+        userDefaults.set(lastSelectedModelId, forKey: "lastSelectedModelId")
         
         // Securely store API keys in keychain
         KeychainManager.save(key: "liteLLMKey", data: liteLLMKey)
@@ -34,6 +36,7 @@ class SettingsManager: ObservableObject {
     
     func loadSettings() {
         liteLLMURL = userDefaults.string(forKey: "liteLLMURL") ?? ""
+        lastSelectedModelId = userDefaults.string(forKey: "lastSelectedModelId") ?? ""
         
         // Load API keys from keychain
         liteLLMKey = KeychainManager.load(key: "liteLLMKey") ?? ""

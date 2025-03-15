@@ -5,7 +5,6 @@
 //  Created by Aleksey Cherkasskiy on 15.03.2025.
 //
 
-
 import SwiftUI
 
 struct ChatView: View {
@@ -13,6 +12,8 @@ struct ChatView: View {
     @State private var messages: [ChatMessage] = []
     @State private var isLoading = false
     @State private var showChatList = false
+    @State private var errorMessage: String?
+    @State private var showErrorAlert = false
     @EnvironmentObject private var modelManager: ModelManager
     @EnvironmentObject private var settingsManager: SettingsManager
     @EnvironmentObject private var chatHistoryManager: ChatHistoryManager
@@ -35,8 +36,15 @@ struct ChatView: View {
                 .pickerStyle(MenuPickerStyle())
                 .disabled(modelManager.models.isEmpty)
                 .onChange(of: selectedModelId) { newValue in
-                    if let currentSession = chatHistoryManager.currentSession, currentSession.modelId != newValue {
-                        chatHistoryManager.updateCurrentSession(messages: messages, modelId: newValue)
+                    if !newValue.isEmpty {
+                        // Save as last selected model
+                        settingsManager.lastSelectedModelId = newValue
+                        settingsManager.saveSettings()
+                        
+                        // Update current session
+                        if let currentSession = chatHistoryManager.currentSession, currentSession.modelId != newValue {
+                            chatHistoryManager.updateCurrentSession(messages: messages, modelId: newValue)
+                        }
                     }
                 }
                 
@@ -123,6 +131,13 @@ struct ChatView: View {
                     .environmentObject(chatHistoryManager)
             }
         }
+        .alert(isPresented: $showErrorAlert) {
+            Alert(
+                title: Text("Ошибка"),
+                message: Text(errorMessage ?? "Произошла неизвестная ошибка"),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
     
     private func loadCurrentSession() {
@@ -135,10 +150,18 @@ struct ChatView: View {
         }
         
         messages = currentSession.messages
-        selectedModelId = currentSession.modelId
         
-        // If modelId is empty but we have models available, set the first model
-        if selectedModelId.isEmpty && !modelManager.models.isEmpty {
+        // Check if the session has a model ID
+        if !currentSession.modelId.isEmpty {
+            selectedModelId = currentSession.modelId
+        }
+        // If not, check if we have a last selected model
+        else if !settingsManager.lastSelectedModelId.isEmpty && modelManager.models.contains(where: { $0.id == settingsManager.lastSelectedModelId }) {
+            selectedModelId = settingsManager.lastSelectedModelId
+            chatHistoryManager.updateCurrentSession(messages: messages, modelId: selectedModelId)
+        }
+        // If no last selected model, use the first available model
+        else if !modelManager.models.isEmpty {
             selectedModelId = modelManager.models.first?.id ?? ""
             chatHistoryManager.updateCurrentSession(messages: messages, modelId: selectedModelId)
         }
@@ -168,7 +191,12 @@ struct ChatView: View {
                 )
                 
                 await MainActor.run {
-                    let assistantMessage = ChatMessage(role: .assistant, content: response)
+                    // Create assistant message with content and reasoning if available
+                    let assistantMessage = ChatMessage(
+                        role: .assistant,
+                        content: response.content,
+                        reasoning: response.reasoning
+                    )
                     messages.append(assistantMessage)
                     isLoading = false
                     
@@ -177,12 +205,14 @@ struct ChatView: View {
                 }
             } catch {
                 await MainActor.run {
-                    let errorMessage = ChatMessage(role: .system, content: "Ошибка: \(error.localizedDescription)")
-                    messages.append(errorMessage)
+                    // Show error alert instead of adding error message to chat
+                    errorMessage = error.localizedDescription
+                    showErrorAlert = true
                     isLoading = false
                     
-                    // Update chat history with the error
-                    chatHistoryManager.updateCurrentSession(messages: messages, modelId: selectedModelId)
+                    // When error occurs, prevent unfinished messages
+                    // from being saved by reverting to the previous state
+                    loadCurrentSession()
                 }
             }
         }

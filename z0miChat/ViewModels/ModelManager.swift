@@ -5,7 +5,6 @@
 //  Created by Aleksey Cherkasskiy on 15.03.2025.
 //
 
-
 import Foundation
 import Combine
 
@@ -36,11 +35,30 @@ class ModelManager: ObservableObject {
         }
     }
     
-    func sendMessage(messages: [ChatMessage], model: AIModel) async throws -> String {
+    func sendMessage(messages: [ChatMessage], model: AIModel) async throws -> (content: String, reasoning: String?) {
         return try await networkService.sendChatMessage(messages: messages, model: model)
     }
     
     func testConnection(liteLLMURL: String) async throws -> Bool {
         return try await networkService.testConnection(liteLLMURL: liteLLMURL)
+    }
+    
+    // Helper method to check if a model supports reasoning/thinking
+    func modelSupportsReasoning(model: AIModel) -> Bool {
+        // Models that are known to support reasoning
+        let modelsWithReasoning = [
+            // Claude models
+            "claude-3-opus",
+            "claude-3-sonnet",
+            "claude-3-haiku",
+            "claude-3.5-sonnet",
+            // DeepSeek models
+            "deepseek-chat",
+            "deepseek-coder",
+            "deepseek-llm",
+            "deepseek/deepseek-reasoner"
+        ]
+        
+        return modelsWithReasoning.contains { model.id.contains($0) }
     }
 }

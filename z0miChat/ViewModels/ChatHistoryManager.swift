@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import UIKit
 
 class ChatHistoryManager: ObservableObject {
     @Published var sessions: [ChatSession] = []
@@ -69,11 +70,53 @@ class ChatHistoryManager: ObservableObject {
     }
     
     func createNewSession() -> ChatSession {
-        let newSession = ChatSession()
+        var newSession = ChatSession()
+        
+        // Set the model ID to the last selected model if available
+        if let settingsManager = getSettingsManager(),
+           !settingsManager.lastSelectedModelId.isEmpty {
+            newSession.modelId = settingsManager.lastSelectedModelId
+        }
+        
         sessions.insert(newSession, at: 0) // Add to the beginning of the list
         currentSessionId = newSession.id
         saveSessions()
         return newSession
+    }
+    
+    // Helper to get access to SettingsManager
+    private func getSettingsManager() -> SettingsManager? {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = scene.windows.first?.rootViewController else {
+            return nil
+        }
+        
+        // Try to find SettingsManager by traversing the view controller hierarchy
+        return findSettingsManager(in: rootVC)
+    }
+    
+    private func findSettingsManager(in viewController: UIViewController) -> SettingsManager? {
+        // Check if the view controller has a SettingsManager in its environment
+        let mirror = Mirror(reflecting: viewController)
+        for child in mirror.children {
+            if let settingsManager = child.value as? SettingsManager {
+                return settingsManager
+            }
+        }
+        
+        // Recursively check presented view controllers
+        if let presentedVC = viewController.presentedViewController {
+            return findSettingsManager(in: presentedVC)
+        }
+        
+        // Recursively check child view controllers
+        for childVC in viewController.children {
+            if let settingsManager = findSettingsManager(in: childVC) {
+                return settingsManager
+            }
+        }
+        
+        return nil
     }
     
     func switchToSession(with id: UUID) {

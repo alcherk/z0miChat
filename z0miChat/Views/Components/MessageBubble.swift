@@ -40,6 +40,12 @@ struct MessageBubble: View {
                             .background(Color(.systemGray6))
                             .cornerRadius(16)
                             .cornerRadius(16, corners: [.topLeft, .topRight, .bottomRight])
+                        
+                        // Show reasoning block if available
+                        if let reasoning = message.reasoning, !reasoning.isEmpty {
+                            ReasoningView(reasoning: reasoning)
+                                .padding(.top, 2)
+                        }
                     } else {
                         // Use regular Text for non-assistant messages
                         Text(message.content)
@@ -62,7 +68,7 @@ struct MessageBubble_Previews: PreviewProvider {
         VStack {
             MessageBubble(message: ChatMessage(role: .user, content: "Hello, how are you?"))
             MessageBubble(message: ChatMessage(role: .assistant, content: "I'm doing well, thanks for asking!"))
-            MessageBubble(message: ChatMessage(role: .assistant, content: "Here's some **bold text** and *italic text*.\n\n```swift\nlet x = 10\n```"))
+            MessageBubble(message: ChatMessage(role: .assistant, content: "Here's some **bold text** and *italic text*.\n\n```swift\nlet x = 10\n```", reasoning: "This response shows formatting examples using Markdown syntax. I'm including both text formatting and a code block."))
             MessageBubble(message: ChatMessage(role: .system, content: "Error: Connection failed"))
         }
         .padding()
