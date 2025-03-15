@@ -129,7 +129,7 @@ struct SettingsView: View {
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
         SettingsView()
-            .environmentObject(ModelManager())
+            .environmentObject(ModelManager(settingsManager: SettingsManager()))
             .environmentObject(SettingsManager())
     }
 }

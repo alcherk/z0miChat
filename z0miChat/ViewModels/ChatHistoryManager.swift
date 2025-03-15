@@ -5,7 +5,6 @@
 //  Created by Aleksey Cherkasskiy on 15.03.2025.
 //
 
-
 import Foundation
 import Combine
 import UIKit
@@ -17,8 +16,10 @@ class ChatHistoryManager: ObservableObject {
     private let userDefaults = UserDefaults.standard
     private let sessionsKey = "chatSessions"
     private let currentSessionKey = "currentSessionId"
+    private let settingsManager: SettingsManager
     
-    init() {
+    init(settingsManager: SettingsManager) {
+        self.settingsManager = settingsManager
         loadSessions()
         
         // If there's no current session, create one
@@ -73,8 +74,7 @@ class ChatHistoryManager: ObservableObject {
         var newSession = ChatSession()
         
         // Set the model ID to the last selected model if available
-        if let settingsManager = getSettingsManager(),
-           !settingsManager.lastSelectedModelId.isEmpty {
+        if !settingsManager.lastSelectedModelId.isEmpty {
             newSession.modelId = settingsManager.lastSelectedModelId
         }
         
@@ -84,40 +84,7 @@ class ChatHistoryManager: ObservableObject {
         return newSession
     }
     
-    // Helper to get access to SettingsManager
-    private func getSettingsManager() -> SettingsManager? {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootVC = scene.windows.first?.rootViewController else {
-            return nil
-        }
-        
-        // Try to find SettingsManager by traversing the view controller hierarchy
-        return findSettingsManager(in: rootVC)
-    }
-    
-    private func findSettingsManager(in viewController: UIViewController) -> SettingsManager? {
-        // Check if the view controller has a SettingsManager in its environment
-        let mirror = Mirror(reflecting: viewController)
-        for child in mirror.children {
-            if let settingsManager = child.value as? SettingsManager {
-                return settingsManager
-            }
-        }
-        
-        // Recursively check presented view controllers
-        if let presentedVC = viewController.presentedViewController {
-            return findSettingsManager(in: presentedVC)
-        }
-        
-        // Recursively check child view controllers
-        for childVC in viewController.children {
-            if let settingsManager = findSettingsManager(in: childVC) {
-                return settingsManager
-            }
-        }
-        
-        return nil
-    }
+
     
     func switchToSession(with id: UUID) {
         currentSessionId = id

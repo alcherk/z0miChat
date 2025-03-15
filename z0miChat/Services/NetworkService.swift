@@ -13,8 +13,14 @@ class NetworkService {
     private let jsonEncoder = JSONEncoder()
     private let jsonDecoder = JSONDecoder()
     
+    private let settingsManager: SettingsManager
+    
     // Enable verbose logging
     private let debugLogging = true
+    
+    init(settingsManager: SettingsManager) {
+        self.settingsManager = settingsManager
+    }
     
     func fetchModels() async throws -> [AIModel] {
         let settingsManager = SettingsManager()
@@ -178,6 +184,7 @@ class NetworkService {
             let choices: [Choice]
             let usage: Usage?
             let reasoning: String?  // Some models may include reasoning directly
+            let reasoning_content: String?  // Additional field for reasoning content
             
             struct Choice: Decodable {
                 let message: Message
@@ -188,6 +195,7 @@ class NetworkService {
                     let role: String
                     let content: String
                     let reasoning: String?  // Field for model reasoning/thinking
+                    let reasoning_content: String?  // Additional field for reasoning content
                 }
             }
             
@@ -204,8 +212,12 @@ class NetworkService {
             throw NSError(domain: "ChatError", code: 2, userInfo: [NSLocalizedDescriptionKey: "No response received"])
         }
         
-        // Extract reasoning either from the message or top-level property
-        let reasoning = firstChoice.message.reasoning ?? chatResponse.reasoning
+        // Extract reasoning either from the message or top-level property,
+        // or try reasoning_content as a fallback
+        let reasoning = firstChoice.message.reasoning ??
+                        chatResponse.reasoning ??
+                        firstChoice.message.reasoning_content ??
+                        chatResponse.reasoning_content
         
         // Use the message content as the response
         return (firstChoice.message.content, reasoning)

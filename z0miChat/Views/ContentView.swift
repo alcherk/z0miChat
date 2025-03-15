@@ -44,8 +44,8 @@ struct ContentView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
-            .environmentObject(ModelManager())
+            .environmentObject(ModelManager(settingsManager: SettingsManager()))
             .environmentObject(SettingsManager())
-            .environmentObject(ChatHistoryManager())
+            .environmentObject(ChatHistoryManager(settingsManager: SettingsManager()))
     }
 }

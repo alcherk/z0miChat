@@ -12,7 +12,11 @@ class ModelManager: ObservableObject {
     @Published var models: [AIModel] = []
     @Published var isLoading = false
     
-    private let networkService = NetworkService()
+    private let networkService: NetworkService
+    
+    init(settingsManager: SettingsManager) {
+        self.networkService = NetworkService(settingsManager: settingsManager)
+    }
     
     func fetchAvailableModels() async {
         await MainActor.run {
@@ -35,7 +39,8 @@ class ModelManager: ObservableObject {
         }
     }
     
-    func sendMessage(messages: [ChatMessage], model: AIModel) async throws -> (content: String, reasoning: String?) {
+    // Change the function name to create a new clean implementation
+    func sendChatMessage(messages: [ChatMessage], model: AIModel) async throws -> (content: String, reasoning: String?) {
         return try await networkService.sendChatMessage(messages: messages, model: model)
     }
     

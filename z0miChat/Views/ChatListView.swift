@@ -119,7 +119,7 @@ struct ChatListView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationView {
             ChatListView()
-                .environmentObject(ChatHistoryManager())
+                .environmentObject(ChatHistoryManager(settingsManager: SettingsManager()))
         }
     }
 }

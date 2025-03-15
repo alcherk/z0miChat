@@ -104,6 +104,8 @@ struct ChatView: View {
                     .background(Color(.systemGray6))
                     .cornerRadius(20)
                     .disabled(isLoading || selectedModelId.isEmpty)
+                    .disableAutocorrection(true)  // Disable autocorrection
+                    .autocapitalization(.none)    // Disable auto capitalization
                 
                 Button(action: sendMessage) {
                     Image(systemName: "arrow.up.circle.fill")
@@ -185,7 +187,7 @@ struct ChatView: View {
                     throw NSError(domain: "ChatError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Выбранная модель не найдена"])
                 }
                 
-                let response = try await modelManager.sendMessage(
+                let response = try await modelManager.sendChatMessage(
                     messages: messages,
                     model: selectedModel
                 )
@@ -222,8 +224,8 @@ struct ChatView: View {
 struct ChatView_Previews: PreviewProvider {
     static var previews: some View {
         ChatView()
-            .environmentObject(ModelManager())
+            .environmentObject(ModelManager(settingsManager: SettingsManager()))
             .environmentObject(SettingsManager())
-            .environmentObject(ChatHistoryManager())
+            .environmentObject(ChatHistoryManager(settingsManager: SettingsManager()))
     }
 }
