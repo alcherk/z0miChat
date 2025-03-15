@@ -124,49 +124,111 @@ class NetworkService {
                 }
             }
             
-            // Process messages for proper formatting
-            var processedMessages: [ChatMessage] = []
+            // Process messages based on model requirements
+            var processedMessages = messages
             
-            // Always add a system message if none exists
-            if !messages.contains(where: { $0.role == .system }) {
-                let systemMsg = ChatMessage(
+            // General message history management for all models
+            // If conversation is very long, we'll truncate it to prevent timeouts
+            if processedMessages.count > 20 {
+                // Save important system messages
+                let systemMessages = processedMessages.filter { $0.role == .system }
+                
+                // Keep only most recent history
+                // More aggressive truncation if we've experienced timeouts before
+                let keepCount = 12
+                processedMessages = Array(processedMessages.suffix(keepCount))
+                
+                // Add system context message about truncation
+                processedMessages.insert(ChatMessage(
                     role: .system,
-                    content: "Вы полезный ассистент, который отвечает на вопросы пользователя."
-                )
-                processedMessages.append(systemMsg)
-            } else {
-                // Get all system messages from the beginning
-                let systemMessages = messages.prefix { $0.role == .system }
-                processedMessages.append(contentsOf: systemMessages)
+                    content: "История беседы была сокращена. Отображаются только последние \(keepCount) сообщений."
+                ), at: 0)
+                
+                // Add back important system messages
+                if !systemMessages.isEmpty {
+                    processedMessages.insert(contentsOf: systemMessages, at: 0)
+                }
             }
             
-            // Process user/assistant messages to ensure proper alternation
-            var lastRole: MessageRole?
-            
-            for message in messages.filter({ $0.role != .system }) {
-                // Skip system messages as they are already processed
+            // Special handling for deepseek models which require strict user/assistant alternation
+            if model.id.contains("deepseek") {
+                // Filter out system messages for processing
+                var filteredMessages = processedMessages.filter { $0.role != .system }
                 
-                // For DeepSeek models, ensure messages alternate between user and assistant
-                if model.id.contains("deepseek") {
-                    if message.role == lastRole {
-                        // Skip this message as it would create successive messages with same role
-                        continue
+                // Ensure strict alternation for user/assistant messages
+                if filteredMessages.count > 1 {
+                    var processedFiltered: [ChatMessage] = []
+                    var currentRole = filteredMessages[0].role
+                    var combinedContent = filteredMessages[0].content
+                    
+                    // Combine consecutive messages of the same role
+                    for i in 1..<filteredMessages.count {
+                        let message = filteredMessages[i]
+                        
+                        if message.role == currentRole {
+                            // Same role - combine content
+                            combinedContent += "\n\n" + message.content
+                        } else {
+                            // Different role - add previous combined message and start new one
+                            processedFiltered.append(ChatMessage(
+                                role: currentRole,
+                                content: combinedContent
+                            ))
+                            currentRole = message.role
+                            combinedContent = message.content
+                        }
+                    }
+                    
+                    // Add the last combined message
+                    processedFiltered.append(ChatMessage(
+                        role: currentRole,
+                        content: combinedContent
+                    ))
+                    
+                    // For Deepseek, ensure we start with a user message and end with a user message
+                    if processedFiltered.first?.role != .user {
+                        // Insert a dummy user message if needed
+                        processedFiltered.insert(ChatMessage(
+                            role: .user,
+                            content: "Инициализация чата."
+                        ), at: 0)
+                    }
+                    
+                    // Limit the conversation history to avoid timeouts
+                    // Keep only the last few messages if history is too long
+                    if processedFiltered.count > 10 {
+                        let systemMsg = ChatMessage(
+                            role: .system,
+                            content: "Предыдущая часть беседы была пропущена для оптимизации запроса."
+                        )
+                        
+                        // Keep last 8 messages (4 user-assistant exchanges)
+                        processedFiltered = Array(processedFiltered.suffix(8))
+                        processedFiltered.insert(systemMsg, at: 0)
+                    }
+                    
+                    // Replace processed messages with the alternating ones
+                    processedMessages = processedFiltered
+                    
+                    // Add back system messages at the beginning
+                    let systemMessages = messages.filter { $0.role == .system }
+                    if !systemMessages.isEmpty {
+                        processedMessages.insert(contentsOf: systemMessages, at: 0)
                     }
                 }
-                
-                processedMessages.append(message)
-                lastRole = message.role
             }
             
-            // Ensure the last message is from user for all models
-            if let lastMessage = processedMessages.last, lastMessage.role != .user {
-                // Remove the last assistant message to ensure user is last
-                processedMessages.removeLast()
-            }
-            
-            // Map to request format
+            // Map to request format and log processed messages
             let requestMessages = processedMessages.map { ChatRequest.Message(role: $0.role.rawValue, content: $0.content) }
             
+            // Log the processed messages for debugging
+            if debugLogging && model.id.contains("deepseek") {
+                print("🧠 Processed messages for \(model.id):")
+                for (i, msg) in processedMessages.enumerated() {
+                    print("  \(i): \(msg.role.rawValue) - \(msg.content.prefix(30))...")
+                }
+            }
+        
             // Add reasoning request for models that support it
             let responseFormat: ChatRequest.ResponseFormat?
             if model.id.contains("claude") || model.id.contains("deepseek") {
