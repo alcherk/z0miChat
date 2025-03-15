@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ChatView: View {
     @State private var messageText = ""
@@ -97,15 +98,12 @@ struct ChatView: View {
                 }
             }
             
-            // Input area
-            HStack {
-                TextField("Напишите сообщение...", text: $messageText)
-                    .padding(10)
+            // Input area with expandable text field
+            HStack(alignment: .bottom) {
+                ExpandableTextEditor(text: $messageText, isDisabled: isLoading || selectedModelId.isEmpty)
+                    .padding(8)
                     .background(Color(.systemGray6))
                     .cornerRadius(20)
-                    .disabled(isLoading || selectedModelId.isEmpty)
-                    .disableAutocorrection(true)  // Disable autocorrection
-                    .autocapitalization(.none)    // Disable auto capitalization
                 
                 Button(action: sendMessage) {
                     Image(systemName: "arrow.up.circle.fill")
@@ -113,6 +111,7 @@ struct ChatView: View {
                         .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading || selectedModelId.isEmpty ? .gray : .blue)
                 }
                 .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading || selectedModelId.isEmpty)
+                .padding(.leading, 4)
             }
             .padding()
         }
