@@ -5,7 +5,6 @@
 //  Created by Aleksey Cherkasskiy on 15.03.2025.
 //
 
-
 import SwiftUI
 
 struct ReasoningView: View {
@@ -24,11 +23,13 @@ struct ReasoningView: View {
                     Text("Размышления")
                         .font(.caption)
                         .fontWeight(.medium)
+                        .foregroundColor(.white)
                     
                     Spacer()
                     
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.caption)
+                        .foregroundColor(.white)
                 }
                 .padding(.vertical, 4)
                 .contentShape(Rectangle())
@@ -44,7 +45,7 @@ struct ReasoningView: View {
             }
         }
         .padding(8)
-        .background(Color.gray.opacity(0.1))
+        .background(Color.purple.opacity(0.7))
         .cornerRadius(8)
     }
 }

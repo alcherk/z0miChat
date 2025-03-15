@@ -34,18 +34,21 @@ struct MessageBubble: View {
                     }
                     
                     if message.role == .assistant {
-                        // Use MarkdownTextView for assistant messages
-                        MarkdownTextView(text: message.content)
-                            .padding(12)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(16)
-                            .cornerRadius(16, corners: [.topLeft, .topRight, .bottomRight])
-                        
-                        // Show reasoning block if available
-                        if let reasoning = message.reasoning, !reasoning.isEmpty {
-                            ReasoningView(reasoning: reasoning)
-                                .padding(.top, 2)
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Show reasoning block at the top if available
+                            if let reasoning = message.reasoning, !reasoning.isEmpty {
+                                ReasoningView(reasoning: reasoning)
+                                    .padding(.horizontal, 8)
+                                    .padding(.top, 8)
+                            }
+                            
+                            // Main message content below reasoning
+                            MarkdownTextView(text: message.content)
+                                .padding(12)
                         }
+                        .background(Color(.systemGray6))
+                        .cornerRadius(16)
+                        .cornerRadius(16, corners: [.topLeft, .topRight, .bottomRight])
                     } else {
                         // Use regular Text for non-assistant messages
                         Text(message.content)
