@@ -96,50 +96,91 @@ class NetworkService {
     }
     
     func sendChatMessage(messages: [ChatMessage], model: AIModel) async throws -> (content: String, reasoning: String?) {
-        let settingsManager = SettingsManager()
-        guard !settingsManager.liteLLMURL.isEmpty else {
-            throw NSError(domain: "NetworkError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Server URL not configured"])
-        }
-        
-        let baseURL = settingsManager.liteLLMURL
-        guard let url = URL(string: "\(baseURL)/v1/chat/completions") else {
-            throw URLError(.badURL)
-        }
-        
-        // Create request body
-        struct ChatRequest: Encodable {
-            let model: String
-            let messages: [Message]
-            let temperature: Double
-            let responseFormat: ResponseFormat?
-            
-            struct Message: Encodable {
-                let role: String
-                let content: String
+            let settingsManager = SettingsManager()
+            guard !settingsManager.liteLLMURL.isEmpty else {
+                throw NSError(domain: "NetworkError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Server URL not configured"])
             }
             
-            struct ResponseFormat: Encodable {
-                let type: String
-                let includeReasoning: Bool?
+            let baseURL = settingsManager.liteLLMURL
+            guard let url = URL(string: "\(baseURL)/v1/chat/completions") else {
+                throw URLError(.badURL)
             }
-        }
-        
-        let requestMessages = messages.map { ChatRequest.Message(role: $0.role.rawValue, content: $0.content) }
-        
-        // Add reasoning request for models that support it
-        let responseFormat: ChatRequest.ResponseFormat?
-        if model.id.contains("claude") || model.id.contains("deepseek") {
-            responseFormat = ChatRequest.ResponseFormat(type: "json", includeReasoning: true)
-        } else {
-            responseFormat = nil
-        }
-        
-        let chatRequest = ChatRequest(
-            model: model.id,
-            messages: requestMessages,
-            temperature: 0.7,
-            responseFormat: responseFormat
-        )
+            
+            // Create request body
+            struct ChatRequest: Encodable {
+                let model: String
+                let messages: [Message]
+                let temperature: Double
+                let responseFormat: ResponseFormat?
+                
+                struct Message: Encodable {
+                    let role: String
+                    let content: String
+                }
+                
+                struct ResponseFormat: Encodable {
+                    let type: String
+                    let includeReasoning: Bool?
+                }
+            }
+            
+            // Process messages for proper formatting
+            var processedMessages: [ChatMessage] = []
+            
+            // Always add a system message if none exists
+            if !messages.contains(where: { $0.role == .system }) {
+                let systemMsg = ChatMessage(
+                    role: .system,
+                    content: "Вы полезный ассистент, который отвечает на вопросы пользователя."
+                )
+                processedMessages.append(systemMsg)
+            } else {
+                // Get all system messages from the beginning
+                let systemMessages = messages.prefix { $0.role == .system }
+                processedMessages.append(contentsOf: systemMessages)
+            }
+            
+            // Process user/assistant messages to ensure proper alternation
+            var lastRole: MessageRole?
+            
+            for message in messages.filter({ $0.role != .system }) {
+                // Skip system messages as they are already processed
+                
+                // For DeepSeek models, ensure messages alternate between user and assistant
+                if model.id.contains("deepseek") {
+                    if message.role == lastRole {
+                        // Skip this message as it would create successive messages with same role
+                        continue
+                    }
+                }
+                
+                processedMessages.append(message)
+                lastRole = message.role
+            }
+            
+            // Ensure the last message is from user for all models
+            if let lastMessage = processedMessages.last, lastMessage.role != .user {
+                // Remove the last assistant message to ensure user is last
+                processedMessages.removeLast()
+            }
+            
+            // Map to request format
+            let requestMessages = processedMessages.map { ChatRequest.Message(role: $0.role.rawValue, content: $0.content) }
+            
+            // Add reasoning request for models that support it
+            let responseFormat: ChatRequest.ResponseFormat?
+            if model.id.contains("claude") || model.id.contains("deepseek") {
+                responseFormat = ChatRequest.ResponseFormat(type: "json", includeReasoning: true)
+            } else {
+                responseFormat = nil
+            }
+            
+            let chatRequest = ChatRequest(
+                model: model.id,
+                messages: requestMessages,
+                temperature: 0.7,
+                responseFormat: responseFormat
+            )
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

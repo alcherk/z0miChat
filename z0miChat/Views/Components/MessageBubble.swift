@@ -51,12 +51,34 @@ struct MessageBubble: View {
                         .cornerRadius(16, corners: [.topLeft, .topRight, .bottomRight])
                     } else {
                         // Use regular Text for non-assistant messages
-                        Text(message.content)
-                            .padding(12)
-                            .background(message.role == .system ? Color.orange.opacity(0.2) : Color(.systemGray6))
-                            .foregroundColor(message.role == .system ? .orange : .primary)
-                            .cornerRadius(16)
-                            .cornerRadius(16, corners: [.topLeft, .topRight, .bottomRight])
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(message.content)
+                                .padding(12)
+                                .background(message.role == .system ? Color.orange.opacity(0.2) : Color(.systemGray6))
+                                .foregroundColor(message.role == .system ? .orange : .primary)
+                                .cornerRadius(16)
+                                .cornerRadius(16, corners: [.topLeft, .topRight, .bottomRight])
+                            
+                            // Add retry button for system error messages
+                            if message.role == .system && message.content.hasPrefix("Ошибка:") {
+                                Button(action: {
+                                    // Use NotificationCenter to broadcast the retry action
+                                    NotificationCenter.default.post(
+                                        name: Notification.Name("RetryLastUserMessage"),
+                                        object: message.id
+                                    )
+                                }) {
+                                    HStack {
+                                        Image(systemName: "arrow.clockwise")
+                                        Text("Повторить последний запрос")
+                                    }
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                }
+                            }
+                        }
                     }
                 }
                 Spacer()

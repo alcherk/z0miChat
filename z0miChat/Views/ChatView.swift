@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import UIKit
+import Combine
 
 struct ChatView: View {
     @State private var messageText = ""
@@ -19,6 +19,9 @@ struct ChatView: View {
     @EnvironmentObject private var settingsManager: SettingsManager
     @EnvironmentObject private var chatHistoryManager: ChatHistoryManager
     @State private var selectedModelId: String = ""
+    
+    // Notification for retry action
+    @State private var retrySubscription: AnyCancellable?
     
     var body: some View {
         VStack {
@@ -117,6 +120,7 @@ struct ChatView: View {
         }
         .onAppear {
             loadCurrentSession()
+            setupRetryHandler()
         }
         .onChange(of: chatHistoryManager.currentSessionId) { _ in
             loadCurrentSession()
@@ -168,6 +172,82 @@ struct ChatView: View {
         }
     }
     
+    // Setup notification handler for retry button
+    private func setupRetryHandler() {
+        retrySubscription = NotificationCenter.default
+            .publisher(for: Notification.Name("RetryLastUserMessage"))
+            .sink { _ in
+                self.retryLastUserMessage()
+            }
+    }
+    
+    // Find and retry last user message
+    private func retryLastUserMessage() {
+        // Find the last system error message
+        if let errorIndex = messages.lastIndex(where: { $0.role == .system && $0.content.hasPrefix("Ошибка:") }) {
+            // Remove the error message
+            messages.remove(at: errorIndex)
+            
+            // Find the last user message before the error
+            if let lastUserMessageIndex = messages.lastIndex(where: { $0.role == .user }) {
+                let userMessage = messages[lastUserMessageIndex]
+                
+                // Remove any assistant messages that might be after this user message
+                // (there typically shouldn't be any if there was an error)
+                while messages.count > lastUserMessageIndex + 1 {
+                    messages.remove(at: lastUserMessageIndex + 1)
+                }
+                
+                // Start loading and update chat history
+                isLoading = true
+                chatHistoryManager.updateCurrentSession(messages: messages, modelId: selectedModelId)
+                
+                // Retry sending the message
+                Task {
+                    do {
+                        guard let selectedModel = modelManager.models.first(where: { $0.id == selectedModelId }) else {
+                            throw NSError(domain: "ChatError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Выбранная модель не найдена"])
+                        }
+                        
+                        let response = try await modelManager.sendChatMessage(
+                            messages: messages,
+                            model: selectedModel
+                        )
+                        
+                        await MainActor.run {
+                            // Create assistant message with content and reasoning if available
+                            let assistantMessage = ChatMessage(
+                                role: .assistant,
+                                content: response.content,
+                                reasoning: response.reasoning
+                            )
+                            messages.append(assistantMessage)
+                            isLoading = false
+                            
+                            // Update chat history with the response
+                            chatHistoryManager.updateCurrentSession(messages: messages, modelId: selectedModelId)
+                        }
+                    } catch {
+                        await MainActor.run {
+                            // Show error alert with retry option
+                            errorMessage = error.localizedDescription
+                            showErrorAlert = true
+                            isLoading = false
+                            
+                            // Add system error message to chat with retry button
+                            let errorContent = "Ошибка: \(error.localizedDescription)"
+                            let errorMsg = ChatMessage(role: .system, content: errorContent)
+                            messages.append(errorMsg)
+                            
+                            // Save the state with error message
+                            chatHistoryManager.updateCurrentSession(messages: messages, modelId: selectedModelId)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     private func sendMessage() {
         let trimmedText = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty, !selectedModelId.isEmpty else { return }
@@ -206,14 +286,18 @@ struct ChatView: View {
                 }
             } catch {
                 await MainActor.run {
-                    // Show error alert instead of adding error message to chat
+                    // Show error alert with retry option
                     errorMessage = error.localizedDescription
                     showErrorAlert = true
                     isLoading = false
                     
-                    // When error occurs, prevent unfinished messages
-                    // from being saved by reverting to the previous state
-                    loadCurrentSession()
+                    // Add system error message to chat with retry button
+                    let errorContent = "Ошибка: \(error.localizedDescription)"
+                    let errorMsg = ChatMessage(role: .system, content: errorContent)
+                    messages.append(errorMsg)
+                    
+                    // Save the state with error message
+                    chatHistoryManager.updateCurrentSession(messages: messages, modelId: selectedModelId)
                 }
             }
         }
